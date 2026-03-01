@@ -7,8 +7,12 @@ import 'services/background_service.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize background service
-  OrefBackgroundService.initialize();
+  // Initialize background service - wrapped in try-catch to prevent crashes
+  try {
+    OrefBackgroundService.initialize();
+  } catch (e) {
+    // Background service failed to initialize, continue without it
+  }
   
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(

@@ -1474,30 +1474,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
   
   Future<void> _checkBackgroundServiceStatus() async {
-    final isRunning = await OrefBackgroundService.isRunning();
-    if (mounted) {
-      setState(() {
-        _isBackgroundServiceRunning = isRunning;
-      });
+    try {
+      final isRunning = await OrefBackgroundService.isRunning();
+      if (mounted) {
+        setState(() {
+          _isBackgroundServiceRunning = isRunning;
+        });
+      }
+    } catch (e) {
+      // Background service not available
     }
   }
   
   void _listenForBackgroundAlerts() {
-    OrefBackgroundService.onAlert.listen((alertData) {
-      if (alertData != null && mounted) {
-        // Show alert notification in UI
-        setState(() {
-          _currentAlert = OrefAlert(
-            title: alertData['title'] ?? '',
-            data: List<String>.from(alertData['data'] ?? []),
-            desc: alertData['desc'] ?? '',
-            timestamp: alertData['timestamp'] ?? 0,
-          );
-        });
-        _pulseController.repeat(reverse: true);
-        _playAlertSound();
-      }
-    });
+    try {
+      OrefBackgroundService.onAlert.listen((alertData) {
+        if (alertData != null && mounted) {
+          // Show alert notification in UI
+          setState(() {
+            _currentAlert = OrefAlert(
+              title: alertData['title'] ?? '',
+              data: List<String>.from(alertData['data'] ?? []),
+              desc: alertData['desc'] ?? '',
+              timestamp: alertData['timestamp'] ?? 0,
+            );
+          });
+          _pulseController.repeat(reverse: true);
+          _playAlertSound();
+        }
+      });
+    } catch (e) {
+      // Background service not available
+    }
   }
 
   void _startMonitoring() {
@@ -1531,14 +1539,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
   
   Future<void> _toggleBackgroundService() async {
-    if (_isBackgroundServiceRunning) {
-      await OrefBackgroundService.stopService();
-    } else {
-      await OrefBackgroundService.startService();
-      // Update selected areas in background service
-      await OrefBackgroundService.updateSelectedAreas(_selectedAreas);
+    try {
+      if (_isBackgroundServiceRunning) {
+        await OrefBackgroundService.stopService();
+      } else {
+        await OrefBackgroundService.startService();
+        // Update selected areas in background service
+        await OrefBackgroundService.updateSelectedAreas(_selectedAreas);
+      }
+      await _checkBackgroundServiceStatus();
+    } catch (e) {
+      // Background service not available
     }
-    await _checkBackgroundServiceStatus();
   }
 
   Future<void> _playAlertSound() async {
