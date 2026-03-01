@@ -28,11 +28,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late String _selectedRingtone;
   String? _customRingtonePath;
   bool _selectAll = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   // Red alert theme colors
   static const Color _alertRed = Color(0xFFE53935);
   static const Color _cardBackground = Color(0xFF2D2D2D);
   static const Color _surfaceColor = Color(0xFF1E1E1E);
+
+  // Filtered areas based on search
+  List<String> get _filteredAreas {
+    if (_searchQuery.isEmpty) {
+      return widget.availableAreas;
+    }
+    return widget.availableAreas
+        .where((area) => area.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
+  }
 
   @override
   void initState() {
@@ -41,6 +53,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedRingtone = widget.selectedRingtone;
     _customRingtonePath = widget.customRingtonePath;
     _selectAll = _selectedAreas.length == widget.availableAreas.length;
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = _searchController.text;
+    });
   }
 
   void _saveAndClose() {
@@ -53,9 +79,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _selectAll = value ?? false;
       if (_selectAll) {
-        _selectedAreas = List.from(widget.availableAreas);
+        // Add all filtered areas to selection
+        _selectedAreas = List.from(_filteredAreas);
       } else {
-        _selectedAreas.clear();
+        // Remove filtered areas from selection
+        for (var area in _filteredAreas) {
+          _selectedAreas.remove(area);
+        }
       }
     });
   }
@@ -131,18 +161,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Select All toggle
             Card(
               color: _cardBackground,
-              child: SwitchListTile(
-                title: const Text(
-                  'בחר הכל',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _selectAll ? 'לבטל הכל' : 'לבחור את כל האזורים',
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-                ),
-                value: _selectAll,
-                onChanged: _toggleSelectAll,
-                activeColor: _alertRed,
+              child: Column(
+                children: [
+                  // Search field
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'חפש עיר...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.clear, color: Colors.grey.shade500),
+                                onPressed: () {
+                                  _searchController.clear();
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.3),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  // Search results count
+                  if (_searchQuery.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'נמצאו ${_filteredAreas.length} תוצאות',
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text(
+                      'בחר הכל',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      _selectAll ? 'לבטל הכל' : 'לבחור את כל האזורים',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                    ),
+                    value: _selectAll,
+                    onChanged: _toggleSelectAll,
+                    activeColor: _alertRed,
+                  ),
+                ],
               ),
             ),
             
@@ -152,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Card(
               color: _cardBackground,
               child: Column(
-                children: widget.availableAreas.map((area) {
+                children: _filteredAreas.map((area) {
                   final isSelected = _selectedAreas.contains(area);
                   return Container(
                     decoration: BoxDecoration(
