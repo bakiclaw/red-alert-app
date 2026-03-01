@@ -227,21 +227,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             
             const SizedBox(height: 8),
             
-            // Areas list
+            // Areas list - lazy loaded with ListView.builder
             Card(
               color: _cardBackground,
-              child: Column(
-                children: _filteredAreas.map((area) {
-                  final isSelected = _selectedAreas.contains(area);
-                  return Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.white.withOpacity(0.05),
-                        ),
-                      ),
-                    ),
-                    child: CheckboxListTile(
+              child: SizedBox(
+                height: 400, // Show ~20 items
+                child: ListView.builder(
+                  itemCount: _filteredAreas.length,
+                  itemExtent: 52, // Fixed height for performance
+                  itemBuilder: (context, index) {
+                    final area = _filteredAreas[index];
+                    final isSelected = _selectedAreas.contains(area);
+                    return CheckboxListTile(
                       title: Text(
                         area,
                         style: TextStyle(
@@ -264,9 +261,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       checkColor: Colors.white,
                       controlAffinity: ListTileControlAffinity.trailing,
                       dense: true,
-                    ),
-                  );
-                }).toList(),
+                    );
+                  },
+                ),
               ),
             ),
             
