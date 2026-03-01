@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -36,17 +37,6 @@ class BackgroundOrefAlert {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'data': data,
-      'desc': desc,
-      'timestamp': timestamp,
-      'timeToRun': timeToRun,
-    };
-  }
-
   DateTime get dateTime => DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
 }
 
@@ -64,34 +54,44 @@ class OrefBackgroundService {
 
   /// Initialize the background service
   static Future<void> initialize() async {
+    // Create notification channel
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'red_alert_foreground',
+      'Red Alert Background Service',
+      description: 'Keeps the alert monitoring running',
+      importance: Importance.low,
+    );
+
     // Initialize notifications
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidSettings);
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('ic_bg_service_small');
+    const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
     
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // Create notification channels
-    await _createNotificationChannels();
+    // Create notification channel
+    await _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
 
     // Request notification permission (Android 13+)
     await _notifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
 
-    // Configure and start background service
+    // Configure background service
     await _service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: _onStart,
         autoStart: false,
         isForegroundMode: true,
-        notificationChannelId: 'red_alert_persistent',
+        notificationChannelId: 'red_alert_foreground',
         initialNotificationTitle: 'Red Alert',
-        initialNotificationContent: 'Service initializing...',
+        initialNotificationContent: 'Monitoring alerts...',
         foregroundServiceNotificationId: _persistentNotificationId,
-        // foregroundServiceTypes - removed location, not needed for network polling
+        foregroundServiceTypes: const [AndroidForegroundType.location],
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
@@ -101,45 +101,9 @@ class OrefBackgroundService {
     );
   }
 
-  /// Create notification channels for Android
-  static Future<void> _createNotificationChannels() async {
-    // Persistent notification channel (foreground service)
-    const persistentChannel = AndroidNotificationChannel(
-      'red_alert_persistent',
-      'Background Service',
-      description: 'Keeps the alert monitoring running in the background',
-      importance: Importance.low,
-      playSound: false,
-      enableVibration: false,
-    );
-
-    // Alert notification channel (high priority)
-    const alertChannel = AndroidNotificationChannel(
-      'red_alert_alerts',
-      'Red Alert Notifications',
-      description: 'Notifications when a red alert is triggered',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-    );
-
-    final androidPlugin = _notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
-    await androidPlugin?.createNotificationChannel(persistentChannel);
-    await androidPlugin?.createNotificationChannel(alertChannel);
-  }
-
   /// Handle notification tap
   static void _onNotificationTap(NotificationResponse response) {
-    // Handle notification tap - can be extended to open specific screen
-  }
-
-  /// iOS background handler
-  @pragma('vm:entry-point')
-  static Future<bool> _onIosBackground(ServiceInstance service) async {
-    DartPluginRegistrant.ensureInitialized();
-    return true;
+    // Handle notification tap if needed
   }
 
   /// Main background service entry point
@@ -169,18 +133,18 @@ class OrefBackgroundService {
 
     /// Show persistent notification
     Future<void> showPersistentNotification() async {
-      const androidDetails = AndroidNotificationDetails(
-        'red_alert_persistent',
-        'Background Service',
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'red_alert_foreground',
+        'Red Alert Background Service',
         channelDescription: 'Keeps the alert monitoring running',
         ongoing: true,
         autoCancel: false,
         showWhen: false,
         importance: Importance.low,
         priority: Priority.low,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_bg_service_small',
       );
-      const details = NotificationDetails(android: androidDetails);
+      const NotificationDetails details = NotificationDetails(android: androidDetails);
       
       if (selectedAreas.isEmpty) {
         await _notifications.show(
@@ -193,35 +157,10 @@ class OrefBackgroundService {
         await _notifications.show(
           _persistentNotificationId,
           '🔴 Red Alert',
-          'מעקב אחרי ${selectedAreas.length} אזורים פעיל',
+          'מעקב אחרי ${selectedAreas.length} אזורים',
           details,
         );
       }
-    }
-
-    /// Show alert notification when red alert is triggered
-    Future<void> showAlertNotification(BackgroundOrefAlert alert) async {
-      const androidDetails = AndroidNotificationDetails(
-        'red_alert_alerts',
-        'Red Alert Notifications',
-        channelDescription: 'Notifications when a red alert is triggered',
-        importance: Importance.max,
-        priority: Priority.max,
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-        icon: '@mipmap/ic_launcher',
-        playSound: true,
-        enableVibration: true,
-      );
-      const details = NotificationDetails(android: androidDetails);
-
-      final areasText = alert.data.join(', ');
-      await _notifications.show(
-        _alertNotificationId,
-        '⚠️ התראה! ${alert.title}',
-        areasText,
-        details,
-      );
     }
 
     /// Fetch alerts from OREF API
@@ -247,52 +186,73 @@ class OrefBackgroundService {
       return null;
     }
 
-    /// Start polling for alerts
-    void startPolling() {
-      pollingTimer?.cancel();
-      pollingTimer = Timer.periodic(
-        const Duration(seconds: 5),
-        (timer) async {
-          // Reload selected areas periodically
-          await loadSelectedAreas();
-          
-          final alert = await fetchAlerts();
-          
-          if (alert != null) {
-            // Check if this is a new alert
-            if (lastAlertTimestamp == null || lastAlertTimestamp != alert.timestamp) {
-              lastAlertTimestamp = alert.timestamp;
-              
-              // Check if alert is for selected areas (or no areas selected = all)
-              if (selectedAreas.isEmpty || 
-                  alert.data.any((area) => selectedAreas.contains(area))) {
-                // Show alert notification
-                await showAlertNotification(alert);
-                
-                // Send event to main app
-                service.invoke('alert', alert.toJson());
-              }
-            }
-          }
-        },
+    /// Show alert notification
+    Future<void> showAlertNotification(BackgroundOrefAlert alert) async {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'red_alert_alerts',
+        'Red Alert Alerts',
+        channelDescription: 'Alert notifications',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: 'ic_bg_service_small',
+        playSound: true,
+        enableVibration: true,
+      );
+      const NotificationDetails details = NotificationDetails(android: androidDetails);
+      
+      final areas = alert.data.join(', ');
+      await _notifications.show(
+        _alertNotificationId,
+        '⚠️ התראה!',
+        areas,
+        details,
       );
     }
 
-    // Initial setup
+    // Initial load
     await loadSelectedAreas();
     await showPersistentNotification();
-    startPolling();
+
+    // Start polling
+    pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      await loadSelectedAreas();
+      
+      final alert = await fetchAlerts();
+      if (alert != null) {
+        // Check if this is a new alert
+        if (lastAlertTimestamp == null || lastAlertTimestamp != alert.timestamp) {
+          lastAlertTimestamp = alert.timestamp;
+          
+          // Check if any selected area is affected
+          if (selectedAreas.isEmpty || 
+              alert.data.any((area) => selectedAreas.contains(area))) {
+            await showAlertNotification(alert);
+            
+            // Send to main app
+            service.invoke('alert', {
+              'title': alert.title,
+              'data': alert.data,
+              'desc': alert.desc,
+              'timestamp': alert.timestamp,
+            });
+          }
+        }
+      }
+      
+      // Update persistent notification
+      await showPersistentNotification();
+    });
 
     // Listen for stop command
     service.on('stop').listen((event) {
       pollingTimer?.cancel();
+      pollingTimer = null;
       service.stopSelf();
     });
 
     // Listen for update areas command
     service.on('update_areas').listen((event) async {
       if (event != null) {
-        // Handle Map type from background service
         final areas = event['areas'];
         if (areas != null && areas is List) {
           selectedAreas = (areas as List).map((e) => e.toString()).toList();
@@ -300,11 +260,13 @@ class OrefBackgroundService {
         await showPersistentNotification();
       }
     });
+  }
 
-    // Handle service events
-    service.on('start').listen((event) {
-      startPolling();
-    });
+  /// iOS background handler
+  @pragma('vm:entry-point')
+  static Future<bool> _onIosBackground(ServiceInstance service) async {
+    DartPluginRegistrant.ensureInitialized();
+    return true;
   }
 
   /// Start the background service
