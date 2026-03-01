@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../services/oref_service.dart';
+import '../services/background_service.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   OrefService? _orefService;
   StreamSubscription? _alertSubscription;
   bool _isMonitoring = false;
+  bool _isBackgroundServiceRunning = false;
   OrefAlert? _currentAlert;
   List<String> _selectedAreas = [];
   
@@ -1465,6 +1467,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    
+    // Check background service status and listen for alerts
+    _checkBackgroundServiceStatus();
+    _listenForBackgroundAlerts();
+  }
+  
+  Future<void> _checkBackgroundServiceStatus() async {
+    final isRunning = await OrefBackgroundService.isRunning();
+    if (mounted) {
+      setState(() {
+        _isBackgroundServiceRunning = isRunning;
+      });
+    }
+  }
+  
+  void _listenForBackgroundAlerts() {
+    OrefBackgroundService.onAlert.listen((alertData) {
+      if (alertData != null && mounted) {
+        // Show alert notification in UI
+        setState(() {
+          _currentAlert = OrefAlert(
+            title: alertData['title'] ?? '',
+            data: List<String>.from(alertData['data'] ?? []),
+            desc: alertData['desc'] ?? '',
+            timestamp: alertData['timestamp'] ?? 0,
+          );
+        });
+        _pulseController.repeat(reverse: true);
+        _playAlertSound();
+      }
+    });
   }
 
   void _startMonitoring() {
@@ -1475,6 +1508,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _orefService = OrefService(selectedAreas: _selectedAreas);
     _orefService!.startPolling(intervalSeconds: 3);
+    _orefService!.startHistoryPolling(intervalSeconds: 30);
 
     _alertSubscription = _orefService!.alertStream.listen((alert) {
       setState(() {
@@ -1494,6 +1528,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _isMonitoring = false;
       _currentAlert = null;
     });
+  }
+  
+  Future<void> _toggleBackgroundService() async {
+    if (_isBackgroundServiceRunning) {
+      await OrefBackgroundService.stopService();
+    } else {
+      await OrefBackgroundService.startService();
+      // Update selected areas in background service
+      await OrefBackgroundService.updateSelectedAreas(_selectedAreas);
+    }
+    await _checkBackgroundServiceStatus();
   }
 
   Future<void> _playAlertSound() async {
@@ -1786,6 +1831,58 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ],
                   ),
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Background Service Toggle
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _isBackgroundServiceRunning ? Icons.notifications_active : Icons.notifications_off,
+                          color: _isBackgroundServiceRunning ? Colors.greenAccent : Colors.white70,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'שירות רקע',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              _isBackgroundServiceRunning ? 'פעיל - ממשיך גם בנעילת המסך' : 'לא פעיל',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _isBackgroundServiceRunning,
+                      onChanged: (_) => _toggleBackgroundService(),
+                      activeColor: Colors.greenAccent,
+                    ),
+                  ],
                 ),
               ),
               

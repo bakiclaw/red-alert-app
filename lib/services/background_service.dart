@@ -292,13 +292,10 @@ class OrefBackgroundService {
     // Listen for update areas command
     service.on('update_areas').listen((event) async {
       if (event != null) {
-        if (event is List) {
-          selectedAreas = event.cast<String>();
-        } else if (event is Map) {
-          final areas = event['areas'];
-          if (areas is List) {
-            selectedAreas = areas.cast<String>();
-          }
+        // Handle Map type from background service
+        final areas = event['areas'];
+        if (areas != null && areas is List) {
+          selectedAreas = (areas as List).map((e) => e.toString()).toList();
         }
         await showPersistentNotification();
       }

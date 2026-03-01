@@ -41,10 +41,14 @@ class OrefService {
 
   final List<String> selectedAreas;
   Timer? _pollingTimer;
+  Timer? _historyPollingTimer;
   final StreamController<OrefAlert> _alertController =
       StreamController<OrefAlert>.broadcast();
+  final StreamController<List<OrefAlert>> _historyController =
+      StreamController<List<OrefAlert>>.broadcast();
 
   Stream<OrefAlert> get alertStream => _alertController.stream;
+  Stream<List<OrefAlert>> get historyStream => _historyController.stream;
   OrefAlert? _lastAlert;
 
   OrefService({this.selectedAreas = const []});
@@ -121,10 +125,37 @@ class OrefService {
   void stopPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    stopHistoryPolling();
+  }
+
+  /// Start polling for history every 30 seconds
+  void startHistoryPolling({int intervalSeconds = 30}) {
+    _historyPollingTimer?.cancel();
+    _historyPollingTimer = Timer.periodic(
+      Duration(seconds: intervalSeconds),
+      (_) async {
+        final history = await fetchAlertHistory();
+        if (history.isNotEmpty) {
+          _historyController.add(history);
+        }
+      },
+    );
+    // Fetch immediately
+    fetchAlertHistory().then((history) {
+      if (history.isNotEmpty) {
+        _historyController.add(history);
+      }
+    });
+  }
+
+  void stopHistoryPolling() {
+    _historyPollingTimer?.cancel();
+    _historyPollingTimer = null;
   }
 
   void dispose() {
     stopPolling();
     _alertController.close();
+    _historyController.close();
   }
 }
