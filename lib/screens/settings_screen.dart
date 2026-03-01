@@ -27,6 +27,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late List<String> _selectedAreas;
   late String _selectedRingtone;
   String? _customRingtonePath;
+  bool _selectAll = false;
+
+  // Red alert theme colors
+  static const Color _alertRed = Color(0xFFE53935);
+  static const Color _cardBackground = Color(0xFF2D2D2D);
+  static const Color _surfaceColor = Color(0xFF1E1E1E);
 
   @override
   void initState() {
@@ -34,12 +40,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedAreas = List.from(widget.selectedAreas);
     _selectedRingtone = widget.selectedRingtone;
     _customRingtonePath = widget.customRingtonePath;
+    _selectAll = _selectedAreas.length == widget.availableAreas.length;
   }
 
   void _saveAndClose() {
     widget.onAreasChanged(_selectedAreas);
     widget.onRingtoneChanged(_selectedRingtone, _customRingtonePath);
     Navigator.pop(context);
+  }
+
+  void _toggleSelectAll(bool? value) {
+    setState(() {
+      _selectAll = value ?? false;
+      if (_selectAll) {
+        _selectedAreas = List.from(widget.availableAreas);
+      } else {
+        _selectedAreas.clear();
+      }
+    });
   }
 
   Future<void> _pickRingtone() async {
@@ -50,7 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result != null && result.files.isNotEmpty) {
       setState(() {
-        _customRingtonePath = result!.files.first.path;
+        _customRingtonePath = result.files.first.path;
         _selectedRingtone = 'custom';
       });
     }
@@ -61,117 +79,357 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('הגדרות'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _saveAndClose,
+        ),
         actions: [
           TextButton(
             onPressed: _saveAndClose,
-            child: const Text('שמור', style: TextStyle(color: Colors.white)),
+            child: const Row(
+              children: [
+                Text(
+                  'שמור',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.check, color: Colors.white, size: 20),
+              ],
+            ),
           ),
         ],
       ),
-      body: ListView(
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'בחר אזורים לסינון:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              _surfaceColor,
+              Color(0xFF121212),
+            ],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Areas Section
+            _buildSectionHeader(
+              icon: Icons.location_on,
+              title: 'אזורים למעקב',
+              subtitle: _selectedAreas.isEmpty 
+                  ? 'בחר אזורים לקבלת התראות'
+                  : '${_selectedAreas.length} אזורים נבחרו',
             ),
-          ),
-          ...widget.availableAreas.map((area) => CheckboxListTile(
-            title: Text(area),
-            value: _selectedAreas.contains(area),
-            onChanged: (checked) {
-              setState(() {
-                if (checked == true) {
-                  _selectedAreas.add(area);
-                } else {
-                  _selectedAreas.remove(area);
-                }
-              });
-            },
-          )),
-          
-          const Divider(),
-          
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'בחר צלצול:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            
+            const SizedBox(height: 8),
+            
+            // Select All toggle
+            Card(
+              color: _cardBackground,
+              child: SwitchListTile(
+                title: const Text(
+                  'בחר הכל',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  _selectAll ? 'לבטל הכל' : 'לבחור את כל האזורים',
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                ),
+                value: _selectAll,
+                onChanged: _toggleSelectAll,
+                activeColor: _alertRed,
+              ),
             ),
-          ),
-          
-          RadioListTile<String>(
-            title: const Text('ברירת מחדל'),
-            subtitle: const Text('צלצול המערכת'),
-            value: 'default',
-            groupValue: _selectedRingtone,
-            onChanged: (value) {
-              setState(() {
-                _selectedRingtone = value!;
-                _customRingtonePath = null;
-              });
-            },
-          ),
-          
-          RadioListTile<String>(
-            title: const Text('ללא צליל'),
-            subtitle: const Text('רק רטט'),
-            value: 'none',
-            groupValue: _selectedRingtone,
-            onChanged: (value) {
-              setState(() {
-                _selectedRingtone = value!;
-                _customRingtonePath = null;
-              });
-            },
-          ),
-          
-          ListTile(
-            title: const Text('בחר מהמכשיר'),
-            subtitle: Text(
-              _customRingtonePath != null 
-                  ? _customRingtonePath!.split('/').last 
-                  : 'לחץ לבחור קובץ צליל'
-            ),
-            trailing: const Icon(Icons.folder_open),
-            onTap: _pickRingtone,
-          ),
-          
-          if (_customRingtonePath != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _customRingtonePath!.split('/').last,
-                      style: const TextStyle(color: Colors.green),
+            
+            const SizedBox(height: 8),
+            
+            // Areas list
+            Card(
+              color: _cardBackground,
+              child: Column(
+                children: widget.availableAreas.map((area) {
+                  final isSelected = _selectedAreas.contains(area);
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.white.withOpacity(0.05),
+                        ),
+                      ),
                     ),
+                    child: CheckboxListTile(
+                      title: Text(
+                        area,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey.shade400,
+                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                        ),
+                      ),
+                      value: isSelected,
+                      onChanged: (checked) {
+                        setState(() {
+                          if (checked == true) {
+                            _selectedAreas.add(area);
+                          } else {
+                            _selectedAreas.remove(area);
+                          }
+                          _selectAll = _selectedAreas.length == widget.availableAreas.length;
+                        });
+                      },
+                      activeColor: _alertRed,
+                      checkColor: Colors.white,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      dense: true,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Ringtone Section
+            _buildSectionHeader(
+              icon: Icons.music_note,
+              title: 'צלצול התראה',
+              subtitle: _getRingtoneSubtitle(),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            Card(
+              color: _cardBackground,
+              child: Column(
+                children: [
+                  // Default ringtone
+                  RadioListTile<String>(
+                    title: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _alertRed.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.notifications_active,
+                            color: _alertRed,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('צלצול ברירת מחדל'),
+                      ],
+                    ),
+                    subtitle: const Text(
+                      'צלצול המערכת הסטנדרטי',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: 'default',
+                    groupValue: _selectedRingtone,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRingtone = value!;
+                        _customRingtonePath = null;
+                      });
+                    },
+                    activeColor: _alertRed,
+                  ),
+                  
+                  const Divider(height: 1),
+                  
+                  // Silent mode
+                  RadioListTile<String>(
+                    title: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.vibration,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('רק רטט'),
+                      ],
+                    ),
+                    subtitle: const Text(
+                      'ללא צליל - רק רטט',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: 'none',
+                    groupValue: _selectedRingtone,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRingtone = value!;
+                        _customRingtonePath = null;
+                      });
+                    },
+                    activeColor: _alertRed,
+                  ),
+                  
+                  const Divider(height: 1),
+                  
+                  // Custom ringtone
+                  ListTile(
+                    onTap: _pickRingtone,
+                    title: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.folder_open,
+                            color: Colors.purple,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('קובץ מותאם אישית'),
+                      ],
+                    ),
+                    subtitle: Text(
+                      _customRingtonePath != null 
+                          ? _customRingtonePath!.split('/').last
+                          : 'בחר קובץ צליל מהמכשיר',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _customRingtonePath != null 
+                            ? _alertRed 
+                            : Colors.grey.shade400,
+                      ),
+                    ),
+                    trailing: _customRingtonePath != null
+                        ? const Icon(Icons.check_circle, color: _alertRed)
+                        : const Icon(Icons.chevron_left, color: Colors.grey),
                   ),
                 ],
               ),
             ),
-          
-          const Divider(),
-          
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: const Text('אודות'),
-            subtitle: const Text('גרסה 1.0.0'),
-            onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Red Alert',
-                applicationVersion: '1.0.0',
-                applicationLegalese: '© 2026 Baki Labs',
-              );
-            },
+            
+            const SizedBox(height: 24),
+            
+            // About Section
+            _buildSectionHeader(
+              icon: Icons.info_outline,
+              title: 'אודות',
+              subtitle: 'מידע על האפליקציה',
+            ),
+            
+            const SizedBox(height: 8),
+            
+            Card(
+              color: _cardBackground,
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _alertRed.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.shield,
+                        color: _alertRed,
+                      ),
+                    ),
+                    title: const Text('רד אלרט'),
+                    subtitle: const Text('גרסה 1.0.0'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.code,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    title: const Text('פותח על ידי'),
+                    subtitle: const Text('Baki Labs © 2026'),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _alertRed.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: _alertRed, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade400,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  String _getRingtoneSubtitle() {
+    switch (_selectedRingtone) {
+      case 'default':
+        return 'צלצול ברירת מחדל';
+      case 'none':
+        return 'רק רטט';
+      case 'custom':
+        return _customRingtonePath?.split('/').last ?? 'קובץ מותאם אישית';
+      default:
+        return 'בחר צלצול';
+    }
   }
 }
