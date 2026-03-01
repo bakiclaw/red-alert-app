@@ -91,7 +91,7 @@ class OrefBackgroundService {
         initialNotificationTitle: 'Red Alert',
         initialNotificationContent: 'Service initializing...',
         foregroundServiceNotificationId: _persistentNotificationId,
-        foregroundServiceTypes: [AndroidForegroundType.location],
+        // foregroundServiceTypes - removed location, not needed for network polling
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
@@ -309,24 +309,36 @@ class OrefBackgroundService {
 
   /// Start the background service
   static Future<bool> startService() async {
-    final isRunning = await _service.isRunning();
-    if (!isRunning) {
-      return await _service.startService();
+    try {
+      final isRunning = await _service.isRunning();
+      if (!isRunning) {
+        return await _service.startService();
+      }
+      return true;
+    } catch (e) {
+      return false;
     }
-    return true;
   }
 
   /// Stop the background service
   static Future<void> stopService() async {
-    final isRunning = await _service.isRunning();
-    if (isRunning) {
-      _service.invoke('stop');
+    try {
+      final isRunning = await _service.isRunning();
+      if (isRunning) {
+        _service.invoke('stop');
+      }
+    } catch (e) {
+      // Ignore errors
     }
   }
 
   /// Check if service is running
   static Future<bool> isRunning() async {
-    return await _service.isRunning();
+    try {
+      return await _service.isRunning();
+    } catch (e) {
+      return false;
+    }
   }
 
   /// Update selected areas in background service
