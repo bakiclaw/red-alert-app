@@ -91,7 +91,6 @@ class OrefBackgroundService {
         initialNotificationTitle: 'Red Alert',
         initialNotificationContent: 'Monitoring alerts...',
         foregroundServiceNotificationId: _persistentNotificationId,
-        foregroundServiceTypes: const [AndroidForegroundType.location],
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
