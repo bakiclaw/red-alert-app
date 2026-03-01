@@ -37,6 +37,7 @@ class OrefAlert {
 class OrefService {
   static const String _baseUrl = 'https://www.oref.org.il';
   static const String _alertsEndpoint = '/WarningMessages/alerts.json';
+  static const String _historyEndpoint = '/warningMessages/alert/History/AlertsHistory.json';
 
   final List<String> selectedAreas;
   Timer? _pollingTimer;
@@ -47,6 +48,31 @@ class OrefService {
   OrefAlert? _lastAlert;
 
   OrefService({this.selectedAreas = const []});
+
+  /// Fetches alert history from the last 24 hours
+  Future<List<OrefAlert>> fetchAlertHistory() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl$_historyEndpoint'),
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': 'https://www.oref.org.il/heb/alerts-history',
+          'accept': 'application/json, text/plain, */*',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data != null && data is List) {
+          return data.map((item) => OrefAlert.fromJson(item)).toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort newest first
+        }
+      }
+    } catch (e) {
+      // Silently handle errors
+    }
+    return [];
+  }
 
   Future<OrefAlert?> fetchAlerts() async {
     try {

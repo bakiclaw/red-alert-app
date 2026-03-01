@@ -427,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     title: const Text('רד אלרט'),
-                    subtitle: const Text('גרסה 1.0.0'),
+                    subtitle: const Text('גרסה 1.0.5'),
                   ),
                   const Divider(height: 1),
                   ListTile(
