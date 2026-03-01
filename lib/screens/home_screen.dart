@@ -1469,8 +1469,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
     
     // Check background service status and listen for alerts
-    _checkBackgroundServiceStatus();
-    _listenForBackgroundAlerts();
+    _checkBackgroundServiceStatus(); // TEMP DISABLED
+    // _listenForBackgroundAlerts();
   }
   
   Future<void> _checkBackgroundServiceStatus() async {
@@ -1538,7 +1538,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Update selected areas in background service
       await OrefBackgroundService.updateSelectedAreas(_selectedAreas);
     }
-    await _checkBackgroundServiceStatus();
+    await _checkBackgroundServiceStatus(); // TEMP DISABLED
   }
 
   Future<void> _playAlertSound() async {
